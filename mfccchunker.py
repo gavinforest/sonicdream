@@ -53,7 +53,7 @@ for root, dirs, files in os.walk(".", topdown = False):
 filenames = [name for name in filenames if ".wav" in name]
 # print(filenames)
 chunkInd = 0
-for filename in filenames[-1:]:
+for filename in filenames:
 	print("opening: " + filename + " " + str(chunkInd) + " / " + str(len(filenames)))
 	
 	sound, filerate = sf.read(filename, dtype='float32')
@@ -72,28 +72,30 @@ for filename in filenames[-1:]:
 	# 	sound = sound.astype(np.float32, order='C') / 32768.0
 	print("file dtype: " + str(sound.dtype))
 
+	mfccChunks= []
 	mfccChunkPoints = []
 	print("starting to chunk mfccs for: " + filename)
 	start = time.time()
 	for i in range(int(sound.size / OUTPUT_FRAMES_PER_BLOCK)-10):
-		mychunk = librosa.feature.mfcc(sound[i * OUTPUT_FRAMES_PER_BLOCK : (i+1) * OUTPUT_FRAMES_PER_BLOCK], sr = filerate, n_mfcc=92)
+		mychunk = librosa.feature.mfcc(sound[i * OUTPUT_FRAMES_PER_BLOCK : (i+1) * OUTPUT_FRAMES_PER_BLOCK], sr = filerate, n_mfcc=64)
 		
 		#DEBUG PRINT
-		print("chunk shape: " + str(mychunk.shape))
-		plt.figure(figsize=(92, 5))
-		ldisp.specshow(mychunk, x_axis='time')
-		plt.colorbar()
-		plt.tight_layout()
-		plt.show()
+		# print("chunk shape: " + str(mychunk.shape))
+		# plt.figure(figsize=(64, 5))
+		# ldisp.specshow(mychunk, x_axis='time')
+		# plt.colorbar()
+		# plt.tight_layout()
+		# plt.show()
 
 		# print("chunked in" + filename + str(end-start))
 		# print(mychunk.shape)
-		mfccChunkPoints.append((mychunk, i * OUTPUT_FRAMES_PER_BLOCK))
+		mfccChunks.append(mychunk)
+		mfccChunkPoints.append(i * OUTPUT_FRAMES_PER_BLOCK)
 
 	print("pickling...")
 	picklename = str(chunkInd)
 	with open(PICKLEROOT + picklename+"MFCCChunk", "wb+") as f:
-		pickle.dump((filename, mfccChunkPoints[:]), f)
+		np.savez(f, np.array(mfccChunks), np.array(mfccChunkPoints), np.array(filename), "mfccChunks", "mfccChunkPoints", "filename")
 
 	end = time.time()
 	print("chunked " + filename + str(end-start))

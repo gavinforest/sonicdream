@@ -11,26 +11,15 @@ import os
 import scipy
 import soundfile as sf
 import pickle
+import random
 
 
-#float because that's what the mac microphone needs
-PLAYER_FORMAT = pyaudio.paFloat32
-PLAYER_CHANNELS = 1
-PLAYER_RATE = 48000
-
-LISTENER_FORMAT = pyaudio.paFloat32
-LISTENER_CHANNELS = 1
-LISTENER_RATE = 48000
-
-OUTPUT_BLOCK_TIME = 0.05
-OUTPUT_FRAMES_PER_BLOCK = int(PLAYER_RATE*OUTPUT_BLOCK_TIME) #DEBUG might be an error here if player and listener rates different
 
 PICKLEROOT = "/Users/gavin/Documents/Harvard Classes/VES 161/sonicdream/"
 SOUNDROOT = "/Users/gavin/Movies/Audio RAW Sonic Dream/"
 
+DATABASENAME = "selectedMFCCchunks"
 
-bufferLock = threading.Lock()
-inputbuffer = queue.Queue()
 
 filenameKey = {}
 # mfccChunkPoints = {}
@@ -46,5 +35,40 @@ for root, dirs, files in os.walk(".", topdown = False):
 
 filenames = [name for name in filenames if "MFCCChunk" in name]
 
+ShortenedMFCCList = []
+
+ind = 0
+totalLength = 0
 for file in filenames:
-	sourcefilename, mfcclists = 
+	with open(file, 'rb') as f:
+		print("opened: " + file + "   " + str(ind) + "/" + str(len(filenames)))
+		npzfileobject = np.load(f)
+		print("names in archive: " + str(npzfileobject.files))
+		originalFilename = ''.join(npzfileobject["arr_2"].tolist())
+		mfccChunks = npzfileobject["arr_0"]
+		mfccChunkPoints = npzfileobject["arr_1"]
+		print("sucessfully loaded")
+
+		numToSelect = int(mfccChunkPoints.size ** 0.5)
+		totalLength += numToSelect
+
+		indices = random.sample(range(len(mfccChunkPoints)), numToSelect)
+		print("selected " + str(numToSelect) + " points")
+		mfccs = [mfccChunks[i, :, :] for i in indices]
+		print("mfccs have shape: " + str(mfccs[0].shape))
+		mfccPoints= [mfccChunkPoints[i] for i in indices]
+
+		ShortenedMFCCList.append((originalFilename, mfccs, mfccPoints))
+		print("added to shortlist")
+	ind += 1
+
+print("total length is: " + str(totalLength))
+
+with open(DATABASENAME, 'wb+') as f:
+	pickle.dump(ShortenedMFCCList , f)
+
+
+
+
+
+
