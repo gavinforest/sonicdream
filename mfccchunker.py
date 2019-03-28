@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import threading
 import queue
 import librosa
+import librosa.display as ldisp
 import os
 import scipy
 import soundfile as sf
@@ -52,7 +53,7 @@ for root, dirs, files in os.walk(".", topdown = False):
 filenames = [name for name in filenames if ".wav" in name]
 # print(filenames)
 chunkInd = 0
-for filename in filenames:
+for filename in filenames[-1:]:
 	print("opening: " + filename + " " + str(chunkInd) + " / " + str(len(filenames)))
 	
 	sound, filerate = sf.read(filename, dtype='float32')
@@ -75,10 +76,15 @@ for filename in filenames:
 	print("starting to chunk mfccs for: " + filename)
 	start = time.time()
 	for i in range(int(sound.size / OUTPUT_FRAMES_PER_BLOCK)-10):
-		mychunk = librosa.feature.mfcc(sound[i * OUTPUT_FRAMES_PER_BLOCK : (i+1) * OUTPUT_FRAMES_PER_BLOCK], sr = filerate, n_mfcc=92).tolist()
+		mychunk = librosa.feature.mfcc(sound[i * OUTPUT_FRAMES_PER_BLOCK : (i+1) * OUTPUT_FRAMES_PER_BLOCK], sr = filerate, n_mfcc=92)
 		
 		#DEBUG PRINT
-		plt.imshow(np.array(mychunk))
+		print("chunk shape: " + str(mychunk.shape))
+		plt.figure(figsize=(92, 5))
+		ldisp.specshow(mychunk, x_axis='time')
+		plt.colorbar()
+		plt.tight_layout()
+		plt.show()
 
 		# print("chunked in" + filename + str(end-start))
 		# print(mychunk.shape)
