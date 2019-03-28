@@ -14,6 +14,7 @@ import librosa
 import pickle
 import soundfile as sf
 import os
+import random
 
 x = np.random.rand(3000,3000)
 y = np.random.rand(3000)
@@ -33,7 +34,7 @@ LISTENER_RATE = 48000
 OUTPUT_BLOCK_TIME = 0.05
 OUTPUT_FRAMES_PER_BLOCK = int(PLAYER_RATE*OUTPUT_BLOCK_TIME) #DEBUG might be an error here if player and listener rates different
 
-LISTENED_DATA_VOLUME_MULTIPLIER = 3.0
+LISTENED_DATA_VOLUME_MULTIPLIER = 10.0
 
 PICKLEROOT = "/Users/gavin/Documents/Harvard Classes/VES 161/sonicdream/"
 SOUNDROOT = "/Users/gavin/Movies/Audio RAW Sonic Dream/"
@@ -102,28 +103,38 @@ def getBlendArray(listenedBlockData):
 	listenedBlock = librosa.feature.mfcc(listenedBlockData, sr=LISTENER_RATE, n_mfcc=64)
 	listenedBlock = listenedBlock.ravel()
 
-	listenedBlockNorm = np.sum(listenedBlock * listenedBlock) + 0.000000001
+	# listenedBlockNorm = np.sum(listenedBlock * listenedBlock) + 0.000000001
 
-	dotProds = np.sum(mfccs * listenedBlock, axis = 1)
-	dotProds = dotProds
-	angles = dotProds * np.reciprocal(mfccNorms) / listenedBlockNorm
+	diffs = mfccs - listenedBlock
+	dists = np.sum(diffs * diffs, axis = 1)
+	# dotProds = dotProds
+	# angles = dotProds * np.reciprocal(mfccNorms) / listenedBlockNorm
+	# angles = angles - (mfccNorms - listenedBlockNorm) * np.reciprocal(mfccNorms + listenedBlockNorm) 
 
-	maxangleInd = np.argmax(angles)
+
+	maxangleInd = np.argmin(dists)
+	if random.random() < 0.5:
+		dists[maxangleInd] = 100000000
+		maxangleInd = np.argmin(dists)
+
 	print("highest similarity is: " + str(maxangleInd))
 
 	maxangleChunkPoint = int(mfccChunkPoints[maxangleInd])
 	maxangleIndFilename = mfccfilenames[maxangleInd]
 	# print("prevsoundfilename is " + str(prev))
 	sound = None
-
 	if prevsoundfilename is None:
 		sound = soundfileDict[maxangleIndFilename][maxangleChunkPoint : (maxangleChunkPoint + OUTPUT_FRAMES_PER_BLOCK)]
 		prevEndPoint = maxangleChunkPoint + OUTPUT_FRAMES_PER_BLOCK
 		prevsoundfilename = maxangleIndFilename
+		volmult = ((iterationsSincePlayed + 1) / 8.0)
+		if volmult > 1.0:
+			volmult = 1.0
+		sound = sound * volmult
 		iterationsSincePlayed += 1
 
 
-	elif prevsoundfilename == maxangleIndFilename or iterationsSincePlayed < 10:
+	elif prevsoundfilename == maxangleIndFilename or iterationsSincePlayed < 12:
 		sound = soundfileDict[prevsoundfilename][prevEndPoint : prevEndPoint + OUTPUT_FRAMES_PER_BLOCK]
 		if sound.size < OUTPUT_FRAMES_PER_BLOCK:
 			sound = soundfileDict[maxangleIndFilename][maxangleChunkPoint : (maxangleChunkPoint + OUTPUT_FRAMES_PER_BLOCK)]
@@ -131,17 +142,37 @@ def getBlendArray(listenedBlockData):
 			prevsoundfilename = maxangleIndFilename
 			print("switched constant because ending")
 			iterationsSincePlayed = 0
+			volmult = ((iterationsSincePlayed + 3) / 8.0)
+			if volmult > 1.0:
+				volmult = 1.0
+			sound = sound * volmult
 		else:
+			volmult = ((iterationsSincePlayed + 3) / 8.0)
+			if volmult > 1.0:
+				volmult = 1.0
+			sound = sound * volmult
 			prevEndPoint += OUTPUT_FRAMES_PER_BLOCK
 			print("playing constant")
 			iterationsSincePlayed += 1
 
 	else:
+		prevsound = None
+		try:
+			prevsound = soundfileDict[prevsoundfilename][prevEndPoint : prevEndPoint + OUTPUT_FRAMES_PER_BLOCK] * 0.9
+		except:
+			pass
 		sound = soundfileDict[maxangleIndFilename][maxangleChunkPoint : (maxangleChunkPoint + OUTPUT_FRAMES_PER_BLOCK)]
+		volmult = ((iterationsSincePlayed + 1) / 8.0)
+		if volmult > 1.0:
+			volmult = 1.0
+		sound = sound * volmult
+
 		prevEndPoint = maxangleChunkPoint + OUTPUT_FRAMES_PER_BLOCK
 		prevsoundfilename = maxangleIndFilename
 		print("SWITCHED")
 		iterationsSincePlayed = 0
+		if prevsound is not None:
+			sound = prevsound + sound
 
 	return sound
 
@@ -203,7 +234,9 @@ listener = pa.open(format=LISTENER_FORMAT,
 
 start = time.time()
 # for i, block in enumerate(sine_gen()):
-i = 0
+iEnd = 5 * 60 / OUTPUT_BLOCK_TIME
+i = 0.0
+# i = iEnd * 0.8
 while True:
 	print("prevsoundfilename is " + str(prevsoundfilename))
 	print("on loop: " + str(i))
@@ -233,7 +266,11 @@ while True:
 	# 	print("errored, soldiering on")
 
 	if i > 0:
-		totalBlock = toBlendData
+		lucidity = 1 - i / iEnd
+		if lucidity < 0.0:
+			lucidity = 0.0 
+		print("lucidity is " + str(lucidity) + "%")
+		totalBlock = lucidity * listenedBlockData + toBlendData * (1-lucidity)
 		# plt.plot(listenedBlockData)
 		# plt.show()
 	elif i == 0:
